@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UTHM Smart Parking Dashboard</title>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #eef2f5; text-align: center; padding: 20px; color: #333; }
+        .dashboard { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; margin-top: 20px; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); min-width: 320px; }
+        h1 { color: #003366; }
+        h2 { margin-top: 0; color: #34495e; font-size: 1.2rem; border-bottom: 2px solid #eef2f5; padding-bottom: 10px; }
+        .camera-feed { border: 4px solid #003366; border-radius: 8px; background-color: #000; display: block; margin: 0 auto; width: 480px; height: 320px; object-fit: cover; }
+        .status-text { font-size: 1.1rem; margin: 15px 0; }
+        .green { color: #27ae60; font-weight: bold; }
+        .red { color: #e74c3c; font-weight: bold; }
+        .slot-box { display: inline-block; padding: 8px 12px; margin: 5px; border-radius: 8px; color: white; font-weight: bold; }
+        .available { background-color: #27ae60; }
+        .occupied { background-color: #e74c3c; }
+    </style>
+</head>
+
+<body>
+
+    <h1>🚗 UTHM Smart Parking System</h1>
+
+    <div class="dashboard">
+
+        <div class="card">
+            <h2>Live Camera (Cloud)</h2>
+            <img id="cameraFeed" class="camera-feed" src="" alt="Waiting for cloud stream packet...">
+        </div>
+
+        <div class="card">
+            <h2>Gate Control & Security</h2>
+            <p class="status-text"><strong>Latest RFID Scan:</strong> <span id="rfidStatus" class="red">No Card Scanned</span></p>
+            <p class="status-text"><strong>Barrier Gate:</strong> <span id="gateStatus" class="red">LOCKED / CLOSED</span></p>
+        </div>
+
+        <div class="card">
+            <h2>Parking Availability</h2>
+            <p class="status-text"><strong>Regular Parking:</strong> <span id="regularCount" class="green">Checking...</span></p>
+            <p class="status-text"><strong>VIP Parking:</strong> <span id="vipCount" class="green">Checking...</span></p>
+            <p class="status-text"><strong>Total Available:</strong> <span id="totalCount" class="green">Checking...</span></p>
+        </div>
+
+        <div class="card">
+            <h2>Regular Parking Slots</h2>
+            <div id="regularSlots">Loading...</div>
+        </div>
+
+        <div class="card">
+            <h2>VIP Parking Slots</h2>
+            <div id="vipSlots">Loading...</div>
+        </div>
+
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDaIUj-zRGw3p2E4Kx_GzcIeFZN70VMSec",
+            databaseURL: "https://uthm-smart-parking-default-rtdb.asia-southeast1.firebasedatabase.app"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        const cameraRef = database.ref('/camera/live_stream');
+        const parkingRef = database.ref('/parking');
+        const gateRef = database.ref('/gate/status');
+        const rfidRef = database.ref('/rfid/latest');
+
+        cameraRef.on('value', (snapshot) => {
+            const base64String = snapshot.val();
+            if (base64String) {
+                document.getElementById('cameraFeed').src = "data:image/jpeg;base64," + base64String;
+            }
+        });
+
+        gateRef.on('value', (snapshot) => {
+            const gateStatus = snapshot.val();
+
+            if (gateStatus === "open") {
+                document.getElementById('gateStatus').innerHTML = "OPEN";
+                document.getElementById('gateStatus').className = "green";
+            } else {
+                document.getElementById('gateStatus').innerHTML = "LOCKED / CLOSED";
+                document.getElementById('gateStatus').className = "red";
+            }
+        });
+
+        rfidRef.on('value', (snapshot) => {
+            const rfid = snapshot.val();
+            if (rfid) {
+                document.getElementById('rfidStatus').innerHTML = rfid;
+                document.getElementById('rfidStatus').className = "green";
+            }
+        });
+
+        parkingRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+
+            let regularAvailable = 0;
+            let regularTotal = 0;
+            let vipAvailable = 0;
+            let vipTotal = 0;
+
+            let regularHTML = "";
+            let vipHTML = "";
+
+            for (let slot in data.regular) {
+                regularTotal++;
+                let status = data.regular[slot];
+
+                if (status === "available") {
+                    regularAvailable++;
+                }
+
+                regularHTML += `<span class="slot-box ${status}">${slot}: ${status}</span>`;
+            }
+
+            for (let slot in data.vip) {
+                vipTotal++;
+                let status = data.vip[slot];
+
+                if (status === "available") {
+                    vipAvailable++;
+                }
+
+                vipHTML += `<span class="slot-box ${status}">${slot}: ${status}</span>`;
+            }
+
+            document.getElementById('regularCount').innerHTML = regularAvailable + " / " + regularTotal + " Available";
+            document.getElementById('vipCount').innerHTML = vipAvailable + " / " + vipTotal + " Available";
+            document.getElementById('totalCount').innerHTML = (regularAvailable + vipAvailable) + " / " + (regularTotal + vipTotal) + " Available";
+
+            document.getElementById('regularSlots').innerHTML = regularHTML;
+            document.getElementById('vipSlots').innerHTML = vipHTML;
+        });
+    </script>
+
+</body>
+</html>

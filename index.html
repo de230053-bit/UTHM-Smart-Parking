@@ -12,7 +12,8 @@
         body { font-family: Arial, sans-serif; background-color: #eef2f5; text-align: center; padding: 20px; color: #333; }
         .dashboard { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; margin-top: 20px; }
         .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); min-width: 320px; }
-        h1 { color: #003366; }
+        h1 { color: #003366; margin-bottom: 5px; }
+        .datetime { font-size: 1.1rem; color: #34495e; font-weight: bold; margin-bottom: 20px; }
         h2 { margin-top: 0; color: #34495e; font-size: 1.2rem; border-bottom: 2px solid #eef2f5; padding-bottom: 10px; }
         .camera-feed { border: 4px solid #003366; border-radius: 8px; background-color: #000; display: block; margin: 0 auto; width: 480px; height: 320px; object-fit: cover; }
         .status-text { font-size: 1.1rem; margin: 15px 0; }
@@ -27,6 +28,7 @@
 <body>
 
     <h1>🚗 UTHM Smart Parking System</h1>
+    <p id="datetime" class="datetime"></p>
 
     <div class="dashboard">
 
@@ -37,7 +39,8 @@
 
         <div class="card">
             <h2>Gate Control & Security</h2>
-            <p class="status-text"><strong>Latest RFID Scan:</strong> <span id="rfidStatus" class="red">No Card Scanned</span></p>
+            <p class="status-text"><strong>Latest RFID Scan:</strong> <span id="rfidName" class="red">No Card Scanned</span></p>
+            <p class="status-text"><strong>Access Status:</strong> <span id="accessStatus" class="red">N/A</span></p>
             <p class="status-text"><strong>Barrier Gate:</strong> <span id="gateStatus" class="red">LOCKED / CLOSED</span></p>
         </div>
 
@@ -61,6 +64,24 @@
     </div>
 
     <script>
+        // --- Date and Time ---
+        function updateDateTime() {
+            const now = new Date();
+            const options = { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric', 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit' 
+            };
+            document.getElementById('datetime').innerHTML = now.toLocaleDateString('en-US', options);
+        }
+        updateDateTime();
+        setInterval(updateDateTime, 1000);
+
+        // --- Firebase Config ---
         const firebaseConfig = {
             apiKey: "AIzaSyDaIUj-zRGw3p2E4Kx_GzcIeFZN70VMSec",
             databaseURL: "https://uthm-smart-parking-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -69,11 +90,14 @@
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
 
-        const cameraRef = database.ref('/camera/live_stream');
-        const parkingRef = database.ref('/parking');
-        const gateRef = database.ref('/gate/status');
-        const rfidRef = database.ref('/rfid/latest');
+        // --- Firebase References ---
+        const cameraRef    = database.ref('/camera/live_stream');
+        const parkingRef   = database.ref('/parking');
+        const gateRef      = database.ref('/gate/status');
+        const rfidNameRef  = database.ref('/rfid/latestName');
+        const rfidAccessRef = database.ref('/rfid/accessStatus');
 
+        // --- Camera Feed ---
         cameraRef.on('value', (snapshot) => {
             const base64String = snapshot.val();
             if (base64String) {
@@ -81,9 +105,9 @@
             }
         });
 
+        // --- Gate Status ---
         gateRef.on('value', (snapshot) => {
             const gateStatus = snapshot.val();
-
             if (gateStatus === "open") {
                 document.getElementById('gateStatus').innerHTML = "OPEN";
                 document.getElementById('gateStatus').className = "green";
@@ -93,14 +117,28 @@
             }
         });
 
-        rfidRef.on('value', (snapshot) => {
-            const rfid = snapshot.val();
-            if (rfid) {
-                document.getElementById('rfidStatus').innerHTML = rfid;
-                document.getElementById('rfidStatus').className = "green";
+        // --- RFID Name ---
+        rfidNameRef.on('value', (snapshot) => {
+            const name = snapshot.val();
+            if (name) {
+                document.getElementById('rfidName').innerHTML = name;
+                document.getElementById('rfidName').className = "green";
             }
         });
 
+        // --- Access Status ---
+        rfidAccessRef.on('value', (snapshot) => {
+            const access = snapshot.val();
+            if (access === "granted") {
+                document.getElementById('accessStatus').innerHTML = "GRANTED ✅";
+                document.getElementById('accessStatus').className = "green";
+            } else if (access === "denied") {
+                document.getElementById('accessStatus').innerHTML = "DENIED ❌";
+                document.getElementById('accessStatus').className = "red";
+            }
+        });
+
+        // --- Parking Slots ---
         parkingRef.on('value', (snapshot) => {
             const data = snapshot.val();
 
@@ -115,22 +153,14 @@
             for (let slot in data.regular) {
                 regularTotal++;
                 let status = data.regular[slot];
-
-                if (status === "available") {
-                    regularAvailable++;
-                }
-
+                if (status === "available") regularAvailable++;
                 regularHTML += `<span class="slot-box ${status}">${slot}: ${status}</span>`;
             }
 
             for (let slot in data.vip) {
                 vipTotal++;
                 let status = data.vip[slot];
-
-                if (status === "available") {
-                    vipAvailable++;
-                }
-
+                if (status === "available") vipAvailable++;
                 vipHTML += `<span class="slot-box ${status}">${slot}: ${status}</span>`;
             }
 
